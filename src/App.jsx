@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './supabase'
 import CustomerCard from './components/CustomerCard'
+import Dashboard from './components/Dashboard'
 import './App.css'
 
 export default function App() {
+  const [tab, setTab] = useState('dashboard')
   const [customers, setCustomers] = useState([])
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -33,23 +35,37 @@ export default function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>🧑‍💼 Customer 360</h1>
+        <h1>Customer 360</h1>
         <p>Hệ thống phân tích hành vi khách hàng</p>
       </header>
 
-      <div className="search-box">
-        <select onChange={handleSelect} defaultValue="">
-          <option value="" disabled>-- Chọn khách hàng --</option>
-          {customers.map(c => (
-            <option key={c.user_id} value={c.user_id}>
-              {c.full_name} — {c.city} ({c.package})
-            </option>
-          ))}
-        </select>
-      </div>
+      <nav className="tab-nav">
+        <button className={tab === 'dashboard' ? 'tab active' : 'tab'} onClick={() => setTab('dashboard')}>
+          Dashboard
+        </button>
+        <button className={tab === 'customer' ? 'tab active' : 'tab'} onClick={() => setTab('customer')}>
+          Khách hàng
+        </button>
+      </nav>
 
-      {loading && <p className="loading">Đang tải dữ liệu...</p>}
-      {profile && <CustomerCard data={profile} />}
+      {tab === 'dashboard' && <Dashboard />}
+
+      {tab === 'customer' && (
+        <>
+          <div className="search-box">
+            <select onChange={handleSelect} defaultValue="">
+              <option value="" disabled>-- Chọn khách hàng --</option>
+              {customers.map(c => (
+                <option key={c.user_id} value={c.user_id}>
+                  {c.full_name} — {c.city} ({c.package})
+                </option>
+              ))}
+            </select>
+          </div>
+          {loading && <p className="loading">Đang tải dữ liệu...</p>}
+          {profile && <CustomerCard data={profile} />}
+        </>
+      )}
     </div>
   )
 }

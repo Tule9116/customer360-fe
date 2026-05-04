@@ -7,54 +7,50 @@ import {
 
 const COLORS = ['#4f86c6', '#e07b54', '#5cb85c', '#f0ad4e', '#9b59b6', '#e74c3c', '#1abc9c']
 
-const PAGE_SIZE = 1000
-
-async function fetchAll(table, columns) {
-  let rows = [], from = 0
-  while (true) {
-    const { data } = await supabase.from(table).select(columns).range(from, from + PAGE_SIZE - 1)
-    if (!data || data.length === 0) break
-    rows = rows.concat(data)
-    if (data.length < PAGE_SIZE) break
-    from += PAGE_SIZE
-  }
-  return rows
+const RADIAN = Math.PI / 180
+const InnerLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+  const r = innerRadius + (outerRadius - innerRadius) * 0.55
+  const x = cx + r * Math.cos(-midAngle * RADIAN)
+  const y = cy + r * Math.sin(-midAngle * RADIAN)
+  return percent > 0.06 ? (
+    <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={12} fontWeight={700}>
+      {`${(percent * 100).toFixed(0)}%`}
+    </text>
+  ) : null
 }
-
-function countBy(arr, key, topN = null) {
-  const acc = arr.reduce((a, r) => {
-    const k = r[key] || 'Khác'
-    a[k] = (a[k] || 0) + 1
-    return a
-  }, {})
-  let result = Object.entries(acc).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
-  if (topN && result.length > topN) {
-    const top = result.slice(0, topN)
-    const otherSum = result.slice(topN).reduce((s, r) => s + r.value, 0)
-    top.push({ name: 'Khác', value: otherSum })
-    return top
-  }
-  return result
-}
-
-const LABEL_PIE = ({ name, percent }) => percent > 0.04 ? `${(percent * 100).toFixed(0)}%` : ''
 
 export default function Dashboard() {
-  const [customers, setCustomers] = useState([])
-  const [content, setContent]     = useState([])
-  const [search, setSearch]       = useState([])
-  const [loading, setLoading]     = useState(true)
+  const [customers, setCustomers]     = useState([])
+  const [totals, setTotals]           = useState(null)
+  const [mostWatch, setMostWatch]     = useState([])
+  const [taste, setTaste]             = useState([])
+  const [activeLevel, setActiveLevel] = useState([])
+  const [searchType, setSearchType]   = useState([])
+  const [loading, setLoading]         = useState(true)
 
   useEffect(() => {
     async function load() {
-      const [c, cb, sb] = await Promise.all([
-        fetchAll('dim_customer', '*'),
-        fetchAll('fact_content_behavior', 'total_truyen_hinh,total_phim_truyen,total_the_thao,total_thieu_nhi,total_giai_tri,most_watch,taste,active'),
-        fetchAll('fact_search_behavior', 'type'),
+      const [
+        { data: c },
+        { data: tot },
+        { data: mw },
+        { data: ta },
+        { data: al },
+        { data: st },
+      ] = await Promise.all([
+        supabase.from('dim_customer').select('*'),
+        supabase.from('vw_content_totals').select('*').single(),
+        supabase.from('vw_most_watch').select('*'),
+        supabase.from('vw_taste').select('*'),
+        supabase.from('vw_active_level').select('*'),
+        supabase.from('vw_search_type').select('*'),
       ])
-      setCustomers(c)
-      setContent(cb)
-      setSearch(sb)
+      setCustomers(c || [])
+      setTotals(tot)
+      setMostWatch(mw || [])
+      setTaste(ta || [])
+      setActiveLevel(al || [])
+      setSearchType(st || [])
       setLoading(false)
     }
     load()
@@ -62,43 +58,26 @@ export default function Dashboard() {
 
   if (loading) return <p className="loading">Đang tải dữ liệu...</p>
 
+  // KPI
   const totalCustomers = customers.length
   const activeCount    = customers.filter(c => c.is_active).length
   const activeRate     = Math.round((activeCount / totalCustomers) * 100)
 
-  const packageData = countBy(customers, 'package')
-  const cityData    = countBy(customers, 'city')
+  // Package & city từ dim_customer (20 rows — nhỏ, không cần view)
+  const packageCount = customers.reduce((acc, c) => { acc[c.package] = (acc[c.package] || 0) + 1; return acc }, {})
+  const packageData  = Object.entries(packageCount).map(([name, value]) => ({ name, value }))
 
-  const contentTotals = {
-    'Truyền Hình': content.reduce((s, r) => s + (r.total_truyen_hinh || 0), 0),
-    'Phim Truyện': content.reduce((s, r) => s + (r.total_phim_truyen || 0), 0),
-    'Thể Thao':    content.reduce((s, r) => s + (r.total_the_thao || 0), 0),
-    'Thiếu Nhi':   content.reduce((s, r) => s + (r.total_thieu_nhi || 0), 0),
-    'Giải Trí':    content.reduce((s, r) => s + (r.total_giai_tri || 0), 0),
-  }
-  const contentData = Object.entries(contentTotals)
-    .map(([name, value]) => ({ name, value: Math.round(value / 3600) }))
-    .sort((a, b) => b.value - a.value)
+  const cityCount = customers.reduce((acc, c) => { acc[c.city] = (acc[c.city] || 0) + 1; return acc }, {})
+  const cityData  = Object.entries(cityCount).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
 
-  // most_watch: top 6
-  const mostWatchData = countBy(content, 'most_watch', 6)
-
-  // taste: tách theo "-", đếm từng category đơn
-  const tasteCount = {}
-  content.forEach(r => {
-    if (!r.taste) return
-    r.taste.split('-').forEach(cat => {
-      const k = cat.trim()
-      if (k) tasteCount[k] = (tasteCount[k] || 0) + 1
-    })
-  })
-  const tasteData = Object.entries(tasteCount)
-    .map(([name, value]) => ({ name, value }))
-    .sort((a, b) => b.value - a.value)
-    .slice(0, 6)
-
-  const activeLevelData = countBy(content, 'active')
-  const searchTypeData  = countBy(search, 'type')
+  // Content totals từ vw_content_totals
+  const contentData = totals ? [
+    { name: 'Truyền Hình', value: Number(totals.truyen_hinh_k) },
+    { name: 'Phim Truyện', value: Number(totals.phim_truyen_k) },
+    { name: 'Thể Thao',    value: Number(totals.the_thao_k) },
+    { name: 'Thiếu Nhi',   value: Number(totals.thieu_nhi_k) },
+    { name: 'Giải Trí',    value: Number(totals.giai_tri_k) },
+  ].sort((a, b) => b.value - a.value) : []
 
   return (
     <div className="dashboard">
@@ -118,7 +97,7 @@ export default function Dashboard() {
           <div className="kpi-label">Tỷ lệ active</div>
         </div>
         <div className="kpi-card">
-          <div className="kpi-value">{content.length.toLocaleString()}</div>
+          <div className="kpi-value">{totals ? Number(totals.total_records).toLocaleString() : '—'}</div>
           <div className="kpi-label">Bản ghi nội dung</div>
         </div>
       </div>
@@ -130,11 +109,11 @@ export default function Dashboard() {
           <ResponsiveContainer width="100%" height={240}>
             <PieChart>
               <Pie data={packageData} dataKey="value" nameKey="name"
-                cx="50%" cy="45%" outerRadius={80} label={({ name, percent }) => `${name} ${(percent*100).toFixed(0)}%`}
-                labelLine={true}>
+                cx="50%" cy="50%" outerRadius={85} label={InnerLabel} labelLine={false}>
                 {packageData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
               </Pie>
               <Tooltip />
+              <Legend verticalAlign="bottom" height={30} />
             </PieChart>
           </ResponsiveContainer>
         </div>
@@ -158,7 +137,7 @@ export default function Dashboard() {
         <div className="chart-card">
           <h3>Tổng thời gian xem theo thể loại (nghìn giờ)</h3>
           <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={contentData.map(d => ({ ...d, value: Math.round(d.value / 1000) }))} margin={{ top: 20, right: 10, left: 10, bottom: 30 }}>
+            <BarChart data={contentData} margin={{ top: 20, right: 10, left: 10, bottom: 30 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} angle={-15} textAnchor="end" />
               <YAxis tick={{ fontSize: 11 }} />
@@ -174,7 +153,7 @@ export default function Dashboard() {
         <div className="chart-card">
           <h3>Top nội dung xem nhiều nhất</h3>
           <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={mostWatchData} layout="vertical" margin={{ top: 5, right: 20, left: 70, bottom: 5 }}>
+            <BarChart data={mostWatch} layout="vertical" margin={{ top: 5, right: 20, left: 70, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis type="number" tick={{ fontSize: 11 }} />
               <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={70} />
@@ -190,13 +169,13 @@ export default function Dashboard() {
         <div className="chart-card">
           <h3>Sở thích theo thể loại</h3>
           <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={tasteData} layout="vertical" margin={{ top: 5, right: 20, left: 75, bottom: 5 }}>
+            <BarChart data={taste} layout="vertical" margin={{ top: 5, right: 20, left: 75, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis type="number" tick={{ fontSize: 11 }} />
               <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={75} />
               <Tooltip />
               <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                {tasteData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                {taste.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
@@ -206,8 +185,8 @@ export default function Dashboard() {
           <h3>Mức độ hoạt động</h3>
           <ResponsiveContainer width="100%" height={240}>
             <PieChart>
-              <Pie data={activeLevelData} dataKey="value" nameKey="name"
-                cx="50%" cy="45%" outerRadius={80} label={LABEL_PIE}>
+              <Pie data={activeLevel} dataKey="value" nameKey="name"
+                cx="50%" cy="50%" outerRadius={85} label={InnerLabel} labelLine={false}>
                 <Cell fill="#2d7a4f" />
                 <Cell fill="#e07b54" />
               </Pie>
@@ -221,9 +200,9 @@ export default function Dashboard() {
           <h3>Xu hướng tìm kiếm T6 → T7</h3>
           <ResponsiveContainer width="100%" height={240}>
             <PieChart>
-              <Pie data={searchTypeData} dataKey="value" nameKey="name"
-                cx="50%" cy="45%" outerRadius={80} label={LABEL_PIE}>
-                {searchTypeData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+              <Pie data={searchType} dataKey="value" nameKey="name"
+                cx="50%" cy="50%" outerRadius={85} label={InnerLabel} labelLine={false}>
+                {searchType.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
               </Pie>
               <Tooltip />
               <Legend verticalAlign="bottom" height={30} />

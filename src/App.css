@@ -83,7 +83,10 @@ body {
 }
 .chart-card h3 { font-size: 0.9rem; font-weight: 600; color: #555; margin-bottom: 16px; }
 
+.chart-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
 @media (max-width: 640px) {
   .kpi-row { grid-template-columns: repeat(2, 1fr); }
   .chart-row { grid-template-columns: 1fr; }
+  .chart-row-3 { grid-template-columns: 1fr; }
 }

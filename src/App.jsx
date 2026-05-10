@@ -35,16 +35,23 @@ export default function App() {
   return (
     <div className="app">
       <header className="app-header">
+        <div className="header-badge">⚡ Analytics Platform</div>
         <h1>Customer 360</h1>
-        <p>Hệ thống phân tích hành vi khách hàng</p>
+        <p>Hệ thống phân tích hành vi khách hàng toàn diện</p>
       </header>
 
       <nav className="tab-nav">
-        <button className={tab === 'dashboard' ? 'tab active' : 'tab'} onClick={() => setTab('dashboard')}>
-          Dashboard
+        <button
+          className={tab === 'dashboard' ? 'tab active' : 'tab'}
+          onClick={() => setTab('dashboard')}
+        >
+          📊 Dashboard
         </button>
-        <button className={tab === 'customer' ? 'tab active' : 'tab'} onClick={() => setTab('customer')}>
-          Khách hàng
+        <button
+          className={tab === 'customer' ? 'tab active' : 'tab'}
+          onClick={() => setTab('customer')}
+        >
+          👤 Khách hàng
         </button>
       </nav>
 
@@ -53,16 +60,25 @@ export default function App() {
       {tab === 'customer' && (
         <>
           <div className="search-box">
-            <select onChange={handleSelect} defaultValue="">
-              <option value="" disabled>-- Chọn khách hàng --</option>
-              {customers.map(c => (
-                <option key={c.user_id} value={c.user_id}>
-                  {c.full_name} — {c.city} ({c.package})
-                </option>
-              ))}
-            </select>
+            <div className="search-wrap">
+              <select onChange={handleSelect} defaultValue="">
+                <option value="" disabled>Chọn khách hàng để xem profile...</option>
+                {customers.map(c => (
+                  <option key={c.user_id} value={c.user_id}>
+                    {c.full_name} — {c.city} ({c.package})
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
-          {loading && <p className="loading">Đang tải dữ liệu...</p>}
+
+          {loading && (
+            <div className="loading">
+              <div>Đang tải dữ liệu...</div>
+              <div className="loading-dot"><span/><span/><span/></div>
+            </div>
+          )}
+
           {profile && <CustomerCard data={profile} />}
         </>
       )}
